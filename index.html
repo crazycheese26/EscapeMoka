@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Escape Moka Man: Boss Fight</title>
+    <title>Escape Moka Man: Ultimate</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #1a1a1a; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -26,10 +26,10 @@
         .shake { animation: shake 0.5s; }
         
         .boss-hit-flash { animation: flashRed 0.1s; }
-        @keyframes flashRed {
-            0% { filter: brightness(1); }
-            50% { filter: brightness(2) sepia(1) hue-rotate(-50deg) saturate(5); }
-            100% { filter: brightness(1); }
+        
+        /* Laser glow effect */
+        .laser-glow {
+            box-shadow: 0 0 10px #d946ef, 0 0 20px #d946ef, 0 0 30px #d946ef;
         }
     </style>
 </head>
@@ -40,7 +40,7 @@
         
         <!-- Top UI: Boss Health & Score -->
         <div class="w-full flex flex-col items-center">
-            <!-- Boss Health Bar Container -->
+            <!-- Boss Health Bar Container (Hidden in Classic) -->
             <div id="boss-ui" class="w-full max-w-2xl mb-2 hidden">
                 <div class="flex justify-between text-xs text-red-400 font-bold mb-1 uppercase tracking-widest">
                     <span id="boss-name">Moka Man</span>
@@ -56,12 +56,12 @@
                     <!-- Player Stats UI -->
                     <div class="flex flex-col gap-1">
                         <!-- Lives -->
-                        <div class="flex items-center gap-2">
+                        <div id="lives-container" class="flex items-center gap-2">
                             <span class="text-xs text-red-400 w-12 font-bold">LIVES:</span>
                             <div id="lives-ui" class="flex gap-1 text-red-500 text-lg">♥</div>
                         </div>
                         <!-- Ammo -->
-                        <div class="flex items-center gap-2">
+                        <div id="ammo-container" class="flex items-center gap-2">
                             <span class="text-xs text-yellow-400 w-12 font-bold">AMMO:</span>
                             <span id="ammo-ui" class="text-yellow-400 font-mono font-bold text-lg">67</span>
                         </div>
@@ -69,6 +69,13 @@
                         <div class="flex items-center gap-2">
                             <span class="text-xs text-blue-300 w-12 font-bold">DASH:</span>
                             <div id="dash-ui" class="flex gap-1"></div>
+                        </div>
+                        <!-- Laser Timer -->
+                        <div id="laser-ui-container" class="hidden items-center gap-2">
+                            <span class="text-xs text-purple-400 w-12 font-bold">LASER:</span>
+                            <div class="w-24 h-2 bg-gray-800 rounded">
+                                <div id="laser-bar" class="h-full bg-purple-500"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -81,7 +88,7 @@
         
         <!-- Controls Hint / Mobile Controls -->
         <div class="flex flex-col items-center justify-end h-full pb-8">
-            <div class="text-center text-gray-500 text-sm opacity-50 mb-4 hidden md:block">
+            <div id="controls-hint" class="text-center text-gray-500 text-sm opacity-50 mb-4 hidden md:block">
                 WASD/ARROWS to Move • CLICK to Shoot • SPACE to Dash
             </div>
             
@@ -94,39 +101,43 @@
                     DASH
                 </button>
             </div>
-            <div class="text-center text-gray-500 text-sm opacity-50 mt-2 md:hidden">
-                Touch & Drag to run
-            </div>
         </div>
     </div>
 
     <!-- Start Screen -->
     <div id="start-screen" class="absolute inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-        <div class="text-center max-w-md p-6 border-4 border-yellow-700 bg-gray-900 rounded-lg shadow-2xl transform transition-all hover:scale-105">
-            <h2 class="text-4xl text-yellow-500 mb-4 pixel-font tracking-tighter">MOKA MAN<br>AWAKENS</h2>
-            <div class="w-24 h-24 mx-auto mb-4 bg-yellow-900/30 rounded-full flex items-center justify-center border-2 border-yellow-600">
-                <svg viewBox="0 0 24 24" class="w-16 h-16 text-yellow-600" fill="currentColor">
+        <div class="text-center max-w-lg p-6 border-4 border-yellow-700 bg-gray-900 rounded-lg shadow-2xl transform transition-all">
+            <h2 class="text-4xl text-yellow-500 mb-2 pixel-font tracking-tighter">MOKA MAN<br>ULTIMATE</h2>
+            <div class="w-20 h-20 mx-auto mb-4 bg-yellow-900/30 rounded-full flex items-center justify-center border-2 border-yellow-600">
+                <svg viewBox="0 0 24 24" class="w-12 h-12 text-yellow-600" fill="currentColor">
                     <path d="M2,19H22V21H2V19M4,17H20V15H4V17M17,3H7A2,2 0 0,0 5,5V13H19V5A2,2 0 0,0 17,3M19,9H21V13H19V9M7,5H17V13H7V5Z" />
                 </svg>
             </div>
-            <p class="mb-6 text-gray-300">You are a Sugar Cube. <br>Fight back with Sugar Shots!</p>
-            <div class="bg-gray-800 p-3 rounded mb-6 text-sm text-gray-400">
-                <p class="text-yellow-400 mb-1">Ammo is limited! Watch for Supply Drops.</p>
-                <p>Defeat him to gain <span class="text-red-500 font-bold">EXTRA LIVES</span>.</p>
+            <p class="mb-6 text-gray-300 text-sm">You are a Sugar Cube. Run or Fight.</p>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Classic Mode -->
+                <button id="btn-classic" class="pointer-events-auto group bg-gray-800 hover:bg-gray-700 border-2 border-gray-600 hover:border-blue-400 p-4 rounded transition-all">
+                    <div class="text-blue-400 font-bold text-xl mb-1">CLASSIC</div>
+                    <div class="text-xs text-gray-400">Survive as long as possible.<br>No Shooting. One Life.</div>
+                </button>
+
+                <!-- Boss Mode -->
+                <button id="btn-boss" class="pointer-events-auto group bg-gray-800 hover:bg-gray-700 border-2 border-gray-600 hover:border-red-400 p-4 rounded transition-all">
+                    <div class="text-red-400 font-bold text-xl mb-1">BOSS FIGHT</div>
+                    <div class="text-xs text-gray-400">Kill Moka Man.<br>Guns, Lazers, Ammo & Lives.</div>
+                </button>
             </div>
-            <button id="start-btn" class="pointer-events-auto bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 px-8 rounded shadow-[0_4px_0_rgb(113,63,18)] active:shadow-[0_0px_0_rgb(113,63,18)] active:translate-y-1 transition-all text-xl">
-                FIGHT!
-            </button>
         </div>
     </div>
 
     <!-- Game Over Screen -->
     <div id="game-over-screen" class="hidden absolute inset-0 z-20 flex items-center justify-center bg-red-900/90 backdrop-blur-sm">
         <div class="text-center max-w-md p-6">
-            <h2 class="text-5xl text-white mb-2 pixel-font shake">DISSOLVED!</h2>
-            <p class="text-xl text-yellow-200 mb-6">Moka Man caught you.</p>
-            <div class="text-2xl mb-8 font-mono">Max Rage: <span id="final-rage">1</span></div>
-            <div class="text-xl mb-8 font-mono">Score: <span id="final-score">0</span></div>
+            <h2 class="text-5xl text-white mb-2 pixel-font shake">GAME OVER</h2>
+            <p class="text-xl text-yellow-200 mb-6" id="death-msg">Moka Man caught you.</p>
+            <div class="text-2xl mb-4 font-mono">Score: <span id="final-score">0</span></div>
+            <div id="boss-stats-end" class="text-lg mb-8 text-red-300">Rage Reached: <span id="final-rage">0</span></div>
             <button id="restart-btn" class="pointer-events-auto bg-white hover:bg-gray-200 text-red-900 font-bold py-3 px-8 rounded shadow-lg text-xl">
                 TRY AGAIN
             </button>
@@ -138,35 +149,47 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        
+        // UI Elements
         const scoreDisplay = document.getElementById('score-display');
         const dashUi = document.getElementById('dash-ui');
         const livesUi = document.getElementById('lives-ui');
         const ammoUi = document.getElementById('ammo-ui');
+        const livesContainer = document.getElementById('lives-container');
+        const ammoContainer = document.getElementById('ammo-container');
+        const laserUiContainer = document.getElementById('laser-ui-container');
+        const laserBar = document.getElementById('laser-bar');
+        const controlsHint = document.getElementById('controls-hint');
+        
         const bossUi = document.getElementById('boss-ui');
         const bossHpBar = document.getElementById('boss-hp-bar');
-        const bossName = document.getElementById('boss-name');
         const rageLevelDisplay = document.getElementById('rage-level');
+        
         const startScreen = document.getElementById('start-screen');
         const gameOverScreen = document.getElementById('game-over-screen');
         const finalScoreDisplay = document.getElementById('final-score');
         const finalRageDisplay = document.getElementById('final-rage');
-        const startBtn = document.getElementById('start-btn');
+        const bossStatsEnd = document.getElementById('boss-stats-end');
+        
+        const btnClassic = document.getElementById('btn-classic');
+        const btnBoss = document.getElementById('btn-boss');
         const restartBtn = document.getElementById('restart-btn');
         const mobileDashBtn = document.getElementById('mobile-dash-btn');
         const mobileShootBtn = document.getElementById('mobile-shoot-btn');
 
         // Game State
         let gameRunning = false;
+        let gameMode = 'BOSS'; // 'CLASSIC' or 'BOSS'
         let score = 0;
-        let lastDashScore = 0;
         let frameCount = 0;
+        
         let particles = [];
-        let projectiles = []; // Enemy shots
-        let bullets = []; // Player shots
+        let projectiles = []; 
+        let bullets = []; 
         let buffs = [];
         let floatingTexts = [];
         
-        // Input State
+        // Input
         const keys = {};
         const mouse = { x: 0, y: 0, isDown: false };
 
@@ -181,16 +204,18 @@
         window.addEventListener('keydown', (e) => {
             if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
             keys[e.key] = true;
-            if (e.key === ' ' && gameRunning) player.tryDash();
+            if (e.key === ' ' && gameRunning && player) player.tryDash();
         });
         window.addEventListener('keyup', (e) => keys[e.key] = false);
         
         window.addEventListener('mousedown', (e) => {
             if (e.target.tagName !== 'BUTTON') {
-                player.shoot(e.clientX, e.clientY);
                 mouse.isDown = true;
                 mouse.x = e.clientX;
                 mouse.y = e.clientY;
+                if (gameRunning && gameMode === 'BOSS' && player && !player.hasLaser) {
+                    player.shoot(e.clientX, e.clientY);
+                }
             }
         });
         window.addEventListener('mousemove', (e) => {
@@ -199,7 +224,7 @@
         });
         window.addEventListener('mouseup', () => mouse.isDown = false);
         
-        // Touch Input
+        // Touch
         const handleTouchMove = (e) => {
             if (e.target.tagName !== 'BUTTON') {
                 e.preventDefault();
@@ -212,14 +237,14 @@
         window.addEventListener('touchmove', handleTouchMove, {passive: false});
         window.addEventListener('touchend', () => mouse.isDown = false);
 
-        // Mobile Buttons
-        mobileDashBtn.addEventListener('touchstart', (e) => { e.stopPropagation(); player.tryDash(); });
+        mobileDashBtn.addEventListener('touchstart', (e) => { 
+            e.stopPropagation(); 
+            if (gameRunning && player) player.tryDash(); 
+        });
         mobileShootBtn.addEventListener('touchstart', (e) => { 
             e.stopPropagation(); 
-            // Auto aim at boss if shooting via button
-            player.shoot(mokaMan.x, mokaMan.y); 
+            if (gameRunning && gameMode === 'BOSS' && player) player.shoot(mokaMan.x, mokaMan.y); 
         });
-
 
         // --- ENTITIES ---
 
@@ -233,7 +258,7 @@
                 this.speedBuffTimer = 0;
                 this.color = '#ffffff';
                 
-                // Survival Stats
+                // Survival
                 this.lives = 1;
                 this.maxLives = 3;
                 this.invulnerableTimer = 0;
@@ -241,6 +266,9 @@
                 // Combat
                 this.ammo = 67;
                 this.shootCooldown = 0;
+                this.hasLaser = false;
+                this.laserTimer = 0;
+                this.laserMaxTime = 180; // Nerfed: 5s -> 3s (180 frames)
 
                 // Dash
                 this.dashCharges = 1;
@@ -251,13 +279,10 @@
                 this.dashSpeed = 18;
                 this.lastDirX = 0;
                 this.lastDirY = 0;
-            }
-
-            addCharge() {
-                if (this.dashCharges < this.maxDashCharges) {
-                    this.dashCharges++;
-                    createParticles(this.x, this.y, '#60A5FA', 5);
-                }
+                
+                // Dash Regen
+                this.dashRegenTimer = 0;
+                this.dashRegenThreshold = 300; // Frames to regen one charge
             }
 
             addLife() {
@@ -267,18 +292,21 @@
                 }
             }
 
+            activateLaser() {
+                this.hasLaser = true;
+                this.laserTimer = this.laserMaxTime;
+                floatingTexts.push(new FloatingText(this.x, this.y - 40, "LASER ACTIVE!", "#d946ef"));
+            }
+
             takeDamage() {
                 if (this.invulnerableTimer > 0) return false;
                 
                 this.lives--;
-                this.invulnerableTimer = 120; // 2 seconds i-frames
+                this.invulnerableTimer = 120;
                 createParticles(this.x, this.y, '#ff0000', 15);
-                
-                // Update UI immediately
                 updateUI();
                 
-                if (this.lives <= 0) return true; // Dead
-                return false; // Still alive
+                return this.lives <= 0;
             }
 
             addAmmo(amount) {
@@ -304,11 +332,12 @@
                          this.lastDirY = Math.sin(angle);
                     }
                     createParticles(this.x, this.y, '#FFFFFF', 10);
+                    updateUI(); // Immediate UI update for dash usage
                 }
             }
 
             shoot(targetX, targetY) {
-                if (this.shootCooldown > 0) return;
+                if (this.shootCooldown > 0 || this.hasLaser) return;
                 
                 if (this.ammo <= 0) {
                     floatingTexts.push(new FloatingText(this.x, this.y, "NO AMMO!", "#555"));
@@ -321,19 +350,108 @@
                 const angle = Math.atan2(targetY - this.y, targetX - this.x);
                 bullets.push(new Bullet(this.x, this.y, angle));
                 this.shootCooldown = 15; 
-                
-                // Recoil
                 this.x -= Math.cos(angle) * 2;
                 this.y -= Math.sin(angle) * 2;
             }
 
+            fireLaser() {
+                if (this.laserTimer > 0) {
+                    const angle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
+                    const range = 800;
+                    const endX = this.x + Math.cos(angle) * range;
+                    const endY = this.y + Math.sin(angle) * range;
+
+                    // Draw Laser
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(endX, endY);
+                    ctx.strokeStyle = '#d946ef';
+                    ctx.lineWidth = 6 + Math.sin(frameCount * 0.5) * 2;
+                    ctx.lineCap = 'round';
+                    ctx.shadowColor = '#f0abfc';
+                    ctx.shadowBlur = 15;
+                    ctx.stroke();
+                    ctx.restore();
+                    
+                    // Laser Damage to Boss (Ray vs Circle Logic)
+                    // Simplified: Check if Boss is near the line
+                    // Project Boss center onto line
+                    const bx = mokaMan.x, by = mokaMan.y;
+                    const A = this.x - bx;
+                    const B = this.y - by;
+                    const C = endX - this.x;
+                    const D = endY - this.y;
+
+                    const dot = - (A * C + B * D);
+                    const lenSq = C * C + D * D;
+                    let param = -1;
+                    if (lenSq !== 0) param = dot / lenSq;
+
+                    let xx, yy;
+
+                    if (param < 0) { xx = this.x; yy = this.y; }
+                    else if (param > 1) { xx = endX; yy = endY; }
+                    else { xx = this.x + param * C; yy = this.y + param * D; }
+
+                    const dist = Math.hypot(bx - xx, by - yy);
+                    if (dist < mokaMan.size * 0.8) {
+                        mokaMan.takeDamage(0.5); // Nerfed: 1.5 -> 0.5 damage per tick
+                        createParticles(xx, yy, '#d946ef', 1);
+                    }
+                    
+                    // Destroy Projectiles with Laser
+                    for(let i = projectiles.length - 1; i >= 0; i--) {
+                        const p = projectiles[i];
+                        const pA = this.x - p.x;
+                        const pB = this.y - p.y;
+                        const pDot = - (pA * C + pB * D);
+                        let pParam = -1;
+                        if(lenSq !== 0) pParam = pDot / lenSq;
+                        
+                        let px, py;
+                        if (pParam < 0) { px = this.x; py = this.y; }
+                        else if (pParam > 1) { px = endX; py = endY; }
+                        else { px = this.x + pParam * C; py = this.y + pParam * D; }
+                        
+                        if (Math.hypot(p.x - px, p.y - py) < p.radius + 10) {
+                            projectiles.splice(i, 1);
+                            createParticles(px, py, '#ffa500', 3);
+                        }
+                    }
+
+                    this.laserTimer--;
+                    if (this.laserTimer <= 0) {
+                        this.hasLaser = false;
+                        floatingTexts.push(new FloatingText(this.x, this.y, "LASER DEPLETED", "#555"));
+                    }
+                }
+            }
+
             update() {
                 if (this.shootCooldown > 0) this.shootCooldown--;
-                if (this.speedBuffTimer > 0) {
-                    this.speedBuffTimer--;
-                    if (this.speedBuffTimer <= 0) this.speedMultiplier = 1;
-                }
+                if (this.speedBuffTimer > 0) this.speedBuffTimer--; else this.speedMultiplier = 1;
                 if (this.invulnerableTimer > 0) this.invulnerableTimer--;
+
+                // Dash Regen Logic
+                // Base 300 frames (5s). Reduces by 30 frames per Rage Level (Boss) or per 10 Score (Classic)
+                let regenReduction = 0;
+                if (gameMode === 'BOSS') regenReduction = mokaMan.rageLevel * 40;
+                else regenReduction = Math.min(200, score * 5);
+                
+                const currentRegenThreshold = Math.max(60, this.dashRegenThreshold - regenReduction);
+                
+                this.dashRegenTimer++;
+                if (this.dashRegenTimer >= currentRegenThreshold) {
+                    if (this.dashCharges < this.maxDashCharges) {
+                        // FIX: Ensure UI is updated correctly if method is called here
+                        // Actually addCharge handles UI? No, addCharge is internal to Player mostly?
+                        // Player.addCharge() calls createParticles, but updateUI needs to be called.
+                        this.addCharge();
+                        updateUI();
+                    }
+                    this.dashRegenTimer = 0;
+                }
 
                 if (this.isDashing) {
                     this.x += this.lastDirX * this.dashSpeed;
@@ -356,7 +474,8 @@
                         this.lastDirY = dy/len;
                         this.x += this.lastDirX * moveSpeed;
                         this.y += this.lastDirY * moveSpeed;
-                    } else if (mouse.isDown) {
+                    } else if (mouse.isDown && !this.hasLaser) {
+                         // Drag move
                         const angle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
                         const dist = Math.hypot(mouse.x - this.x, mouse.y - this.y);
                         if (dist > 10) {
@@ -367,13 +486,24 @@
                         }
                     }
                 }
+                
+                if (this.hasLaser && mouse.isDown) {
+                    this.fireLaser();
+                }
 
                 this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
                 this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
             }
 
+            // ADDED addCharge helper here to fix scope if it was missing or ensure particles
+            addCharge() {
+                if (this.dashCharges < this.maxDashCharges) {
+                    this.dashCharges++;
+                    createParticles(this.x, this.y, '#60A5FA', 5);
+                }
+            }
+
             draw() {
-                // Flicker if invulnerable
                 if (this.invulnerableTimer > 0 && Math.floor(Date.now() / 50) % 2 === 0) return;
 
                 ctx.save();
@@ -382,12 +512,23 @@
                 let bodyColor = this.color;
                 if (this.isDashing) bodyColor = '#93C5FD';
                 else if (this.speedBuffTimer > 0) bodyColor = '#86EFAC';
+                else if (this.hasLaser) bodyColor = '#d946ef';
 
                 ctx.fillStyle = bodyColor;
-                ctx.shadowColor = this.isDashing ? '#3B82F6' : 'rgba(255, 255, 255, 0.5)';
+                ctx.shadowColor = this.hasLaser ? '#d946ef' : (this.isDashing ? '#3B82F6' : 'rgba(255, 255, 255, 0.5)');
                 ctx.shadowBlur = 10;
                 ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
                 
+                // Laser Gun Visual
+                if (this.hasLaser) {
+                    const angle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
+                    ctx.save();
+                    ctx.rotate(angle);
+                    ctx.fillStyle = '#a21caf';
+                    ctx.fillRect(5, -3, 15, 6);
+                    ctx.restore();
+                }
+
                 // Face
                 ctx.fillStyle = '#000';
                 ctx.beginPath();
@@ -456,16 +597,15 @@
                 
                 this.stunTimer = 0;
                 this.fartTimer = 300;
-                this.ammoTimer = 600; // Drop ammo periodically
+                this.ammoTimer = 600; 
                 this.hitFlashTimer = 0;
             }
 
             takeDamage(amount) {
-                if (this.phase === 'rain-pour') return; // Invincible when raining
+                if (this.phase === 'rain-pour' || gameMode === 'CLASSIC') return; 
                 this.hp -= amount;
-                this.hitFlashTimer = 5;
+                this.hitFlashTimer = 3;
                 
-                // Update UI
                 const pct = Math.max(0, (this.hp / this.maxHp) * 100);
                 bossHpBar.style.width = `${pct}%`;
 
@@ -476,24 +616,17 @@
 
             levelUp() {
                 this.rageLevel++;
-                
-                // Reward Player
                 player.addLife();
-                
-                // Visual / Audio feedback
                 floatingTexts.push(new FloatingText(this.x, this.y - 80, "RAGE UP!", "#ff0000"));
                 createParticles(this.x, this.y, '#ff0000', 50);
                 
-                // Stats Buff
                 this.maxHp = 100 + (this.rageLevel * 50);
                 this.hp = this.maxHp;
                 this.baseSpeed += 0.5;
                 
-                // Reset UI
                 bossHpBar.style.width = '100%';
                 rageLevelDisplay.innerText = this.rageLevel + 1;
                 
-                // Clear projectiles
                 projectiles = [];
                 this.stunTimer = 60;
             }
@@ -503,18 +636,15 @@
                 floatingTexts.push(new FloatingText(this.x, this.y - 50, "STUNNED!", "#FCD34D"));
             }
 
-            dropAmmo() {
-                // Shoot an ammo box nearby
+            dropBuff(type) {
                 const angle = Math.random() * Math.PI * 2;
                 const dist = 60;
                 const ax = this.x + Math.cos(angle) * dist;
                 const ay = this.y + Math.sin(angle) * dist;
-                
-                // Keep inside screen
                 const safeX = Math.max(50, Math.min(canvas.width-50, ax));
                 const safeY = Math.max(50, Math.min(canvas.height-50, ay));
                 
-                buffs.push(new Buff(safeX, safeY, 'AMMO'));
+                buffs.push(new Buff(safeX, safeY, type));
                 createParticles(safeX, safeY, '#FFD700', 10);
             }
 
@@ -528,29 +658,34 @@
                     return;
                 }
 
-                // Fart Buffs
                 this.fartTimer--;
                 if (this.fartTimer <= 0) {
                     this.fartTimer = Math.random() * 400 + 400;
-                    this.fart();
+                    const type = gameMode === 'BOSS' && Math.random() < 0.2 ? 'LASER' : (['SPEED', 'DASH', 'STUN'][Math.floor(Math.random()*3)]);
+                    this.dropBuff(type);
                 }
 
-                // Ammo Drops
-                this.ammoTimer--;
-                if (this.ammoTimer <= 0) {
-                    this.dropAmmo();
-                    this.ammoTimer = Math.random() * 800 + 600; // 10-20 sec approx
+                if (gameMode === 'BOSS') {
+                    this.ammoTimer--;
+                    if (this.ammoTimer <= 0) {
+                        this.dropBuff('AMMO');
+                        this.ammoTimer = Math.random() * 800 + 600; 
+                    }
                 }
 
                 // AI Stats
-                this.speed = Math.min(this.baseSpeed + (score / 100), player.baseSpeed * 1.5);
+                if (gameMode === 'BOSS') {
+                    this.speed = Math.min(this.baseSpeed + (score / 200), player.baseSpeed * 1.5);
+                } else {
+                    // Classic: Scale speed purely on score (Time)
+                    this.speed = Math.min(2 + (score / 50), 9);
+                }
                 
-                const canCharge = this.rageLevel >= 1;
-                const canSpin = this.rageLevel >= 2;
-                const canRain = this.rageLevel >= 3;
+                const canCharge = this.rageLevel >= 1 || (gameMode === 'CLASSIC' && score > 300);
+                const canSpin = this.rageLevel >= 2 || (gameMode === 'CLASSIC' && score > 600);
+                const canRain = this.rageLevel >= 3 || (gameMode === 'CLASSIC' && score > 900);
 
                 const angleToPlayer = Math.atan2(player.y - this.y, player.x - this.x);
-
                 this.phaseTimer++;
 
                 if (this.phase === 'chase') {
@@ -558,11 +693,11 @@
                     this.x += Math.cos(this.angle) * this.speed;
                     this.y += Math.sin(this.angle) * this.speed;
 
-                    let actionChance = 0.02 + (this.rageLevel * 0.01);
+                    // Classic mode increases action chance by score, Boss by Rage
+                    let actionChance = gameMode === 'BOSS' ? 0.02 + (this.rageLevel * 0.01) : 0.02 + (score * 0.0001);
                     
                     if (this.phaseTimer > 60 && Math.random() < actionChance) {
                         const rand = Math.random();
-                        
                         if (canRain && rand < 0.2) {
                             this.phase = 'rain-ascend'; this.phaseTimer = 0;
                             floatingTexts.push(new FloatingText(this.x, this.y - 60, "ESPRESSO RAIN!", "#5D4037"));
@@ -573,7 +708,7 @@
                             this.phase = 'charge'; this.phaseTimer = 0;
                             createParticles(this.x, this.y, 'orange', 10);
                         } else {
-                            if (this.rageLevel > 0 && Math.random() < 0.5) this.tripleShoot(player);
+                            if ((this.rageLevel > 0 || score > 500) && Math.random() < 0.5) this.tripleShoot(player);
                             else this.shoot(player);
                         }
                     }
@@ -583,7 +718,7 @@
                         this.angle = angleToPlayer;
                         this.x += (Math.random()-0.5)*4; this.y += (Math.random()-0.5)*4;
                     } else if (this.phaseTimer < 70) { // Dash
-                        const dashSpd = (this.speed * 4) + (this.rageLevel * 2);
+                        const dashSpd = (this.speed * 4);
                         this.x += Math.cos(this.angle) * dashSpd;
                         this.y += Math.sin(this.angle) * dashSpd;
                     } else {
@@ -619,16 +754,6 @@
                         createParticles(this.x, this.y, '#D7CCC8', 20);
                     }
                 }
-            }
-
-            fart() {
-                const backAngle = this.angle + Math.PI;
-                const sx = this.x + Math.cos(backAngle)*40;
-                const sy = this.y + Math.sin(backAngle)*40;
-                const types = ['SPEED', 'DASH', 'STUN'];
-                const type = types[Math.floor(Math.random()*types.length)];
-                buffs.push(new Buff(sx, sy, type));
-                createParticles(sx, sy, '#795548', 20);
             }
 
             shoot(player) {
@@ -744,6 +869,7 @@
                 else if (type==='DASH') { this.color='#60A5FA'; this.label='⏩'; }
                 else if (type==='STUN') { this.color='#FCD34D'; this.label='💫'; }
                 else if (type==='AMMO') { this.color='#FFD700'; this.label='📦'; }
+                else if (type==='LASER') { this.color='#d946ef'; this.label='⚛'; }
             }
             draw() {
                 const pulse = Math.sin(Date.now()/200)*3;
@@ -794,21 +920,28 @@
                 dashUi.appendChild(pip);
             }
             
-            // Lives
             let hearts = '';
             for(let i=0; i<player.lives; i++) hearts += '♥';
             livesUi.innerText = hearts;
-            
-            // Ammo
             ammoUi.innerText = player.ammo;
-            
             scoreDisplay.innerText = score;
+
+            // Laser UI
+            if (player.hasLaser) {
+                laserUiContainer.classList.remove('hidden');
+                laserUiContainer.classList.add('flex');
+                laserBar.style.width = `${(player.laserTimer / player.laserMaxTime) * 100}%`;
+            } else {
+                laserUiContainer.classList.add('hidden');
+                laserUiContainer.classList.remove('flex');
+            }
         }
 
         // Main Loop
         let player, mokaMan, gameLoopId;
 
-        function initGame() {
+        function initGame(mode) {
+            gameMode = mode;
             player = new Player();
             mokaMan = new MokaMan();
             score = 0;
@@ -819,9 +952,24 @@
             buffs = [];
             floatingTexts = [];
             
-            bossUi.classList.remove('hidden');
-            bossHpBar.style.width = '100%';
-            rageLevelDisplay.innerText = '0';
+            // Adjust setup for Classic Mode
+            if (gameMode === 'CLASSIC') {
+                bossUi.classList.add('hidden');
+                livesContainer.classList.add('hidden');
+                ammoContainer.classList.add('hidden');
+                controlsHint.innerText = "WASD/ARROWS to Move • SPACE to Dash • SURVIVE!";
+                mobileShootBtn.classList.add('hidden');
+                mobileDashBtn.style.width = '100%';
+            } else {
+                bossUi.classList.remove('hidden');
+                bossHpBar.style.width = '100%';
+                rageLevelDisplay.innerText = '0';
+                livesContainer.classList.remove('hidden');
+                ammoContainer.classList.remove('hidden');
+                controlsHint.innerText = "WASD/ARROWS to Move • CLICK to Shoot • SPACE to Dash";
+                mobileShootBtn.classList.remove('hidden');
+                mobileDashBtn.style.width = '50%';
+            }
             
             mokaMan.x = -100;
             mokaMan.y = canvas.height / 2;
@@ -840,7 +988,7 @@
                 const p = projectiles[i];
                 if (Math.hypot(player.x - p.x, player.y - p.y) < player.size + p.radius) {
                     if(player.takeDamage()) gameOver();
-                    projectiles.splice(i,1); // Remove bullet that hit
+                    projectiles.splice(i,1); 
                 }
             }
 
@@ -852,22 +1000,27 @@
                     else if (b.type === 'DASH') { player.dashCharges = Math.min(player.maxDashCharges+2, player.dashCharges+1); floatingTexts.push(new FloatingText(player.x, player.y, "+1 DASH", "#60A5FA")); }
                     else if (b.type === 'STUN') { mokaMan.stun(180); floatingTexts.push(new FloatingText(player.x, player.y, "STUNNED!", "#FCD34D")); }
                     else if (b.type === 'AMMO') { 
-                        const amount = Math.floor(Math.random() * 11) + 60; // 60-70
+                        const amount = Math.floor(Math.random() * 11) + 60; 
                         player.addAmmo(amount); 
+                    }
+                    else if (b.type === 'LASER') {
+                        player.activateLaser();
                     }
                     buffs.splice(i, 1);
                     updateUI();
                 }
             }
 
-            // Bullets vs Boss
-            for(let i=bullets.length-1; i>=0; i--) {
-                const b = bullets[i];
-                const dist = Math.hypot(b.x - mokaMan.x, b.y - mokaMan.y);
-                if (dist < mokaMan.size * 0.6) { 
-                    mokaMan.takeDamage(5); 
-                    createParticles(b.x, b.y, '#fff', 5);
-                    bullets.splice(i, 1);
+            // Bullets vs Boss (Only Boss Mode)
+            if (gameMode === 'BOSS') {
+                for(let i=bullets.length-1; i>=0; i--) {
+                    const b = bullets[i];
+                    const dist = Math.hypot(b.x - mokaMan.x, b.y - mokaMan.y);
+                    if (dist < mokaMan.size * 0.6) { 
+                        mokaMan.takeDamage(5); 
+                        createParticles(b.x, b.y, '#fff', 5);
+                        bullets.splice(i, 1);
+                    }
                 }
             }
         }
@@ -877,6 +1030,15 @@
             cancelAnimationFrame(gameLoopId);
             finalScoreDisplay.innerText = score;
             finalRageDisplay.innerText = mokaMan.rageLevel;
+            
+            if (gameMode === 'CLASSIC') {
+                bossStatsEnd.classList.add('hidden');
+                document.getElementById('death-msg').innerText = "You survived for " + score + " ticks!";
+            } else {
+                bossStatsEnd.classList.remove('hidden');
+                document.getElementById('death-msg').innerText = "Moka Man caught you.";
+            }
+
             bossUi.classList.add('hidden');
             gameOverScreen.classList.remove('hidden');
         }
@@ -884,22 +1046,18 @@
         function update() {
             if (!gameRunning) return;
 
-            // Clear
             ctx.fillStyle = '#1a1a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Grid
             ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1;
             ctx.beginPath();
             for(let x=0; x<=canvas.width; x+=50) { ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
             for(let y=0; y<=canvas.height; y+=50) { ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
             ctx.stroke();
 
-            // Updates
             player.update();
             mokaMan.update(player);
             
-            // Arrays
             [projectiles, bullets, buffs, particles, floatingTexts].forEach(arr => {
                 for(let i=arr.length-1; i>=0; i--) {
                     if(arr[i].update) arr[i].update();
@@ -909,7 +1067,6 @@
 
             checkCollisions();
 
-            // Draws
             buffs.forEach(b => b.draw());
             particles.forEach(p => p.draw());
             projectiles.forEach(p => p.draw());
@@ -918,30 +1075,34 @@
             player.draw();
             floatingTexts.forEach(t => t.draw());
 
+            // Score logic
             if (frameCount % 60 === 0 && frameCount > 0) {
                 score++;
-                if (score % 5 === 0 && score !== lastDashScore) {
-                    player.addCharge();
-                    lastDashScore = score;
-                }
                 updateUI();
             }
             frameCount++;
             gameLoopId = requestAnimationFrame(update);
         }
 
-        // Events
-        startBtn.addEventListener('click', () => {
+        // --- MENU EVENTS ---
+        
+        btnClassic.addEventListener('click', () => {
             startScreen.classList.add('hidden');
             gameRunning = true;
-            initGame();
+            initGame('CLASSIC');
             update();
         });
+
+        btnBoss.addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            gameRunning = true;
+            initGame('BOSS');
+            update();
+        });
+
         restartBtn.addEventListener('click', () => {
             gameOverScreen.classList.add('hidden');
-            gameRunning = true;
-            initGame();
-            update();
+            startScreen.classList.remove('hidden'); // Go back to mode selection
         });
     </script>
 </body>
