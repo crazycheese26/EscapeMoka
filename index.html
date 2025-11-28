@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Escape Moka Man</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a1a1a; touch-action: none; }
+        canvas { display: block; }
+        .pixel-font { font-family: 'Courier New', Courier, monospace; font-weight: bold; }
+        
+        /* Shake animation for impact */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .shake { animation: shake 0.5s; }
+    </style>
+</head>
+<body class="text-white select-none">
+
+    <!-- UI Overlay -->
+    <div id="ui-layer" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10">
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-2xl pixel-font text-yellow-500 drop-shadow-md">ESCAPE MOKA MAN</h1>
+                <p class="text-sm text-gray-400">Avoid the Espresso Shots!</p>
+            </div>
+            <div class="text-right">
+                <div class="text-3xl pixel-font font-bold text-white" id="score-display">0</div>
+                <div class="text-xs text-gray-400">SURVIVAL TIME</div>
+            </div>
+        </div>
+        
+        <!-- Mobile Controls Hint -->
+        <div class="text-center text-gray-500 text-sm opacity-50 mb-4 hidden md:block">
+            Use ARROW KEYS or WASD to move
+        </div>
+        <div class="text-center text-gray-500 text-sm opacity-50 mb-4 md:hidden">
+            Touch and Drag to run!
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="absolute inset-0 z-20 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div class="text-center max-w-md p-6 border-4 border-yellow-700 bg-gray-900 rounded-lg shadow-2xl transform transition-all hover:scale-105">
+            <h2 class="text-4xl text-yellow-500 mb-4 pixel-font tracking-tighter">MOKA MAN<br>AWAKENS</h2>
+            <div class="w-24 h-24 mx-auto mb-4 bg-yellow-900/30 rounded-full flex items-center justify-center border-2 border-yellow-600">
+                <!-- Simple Icon representing the boss -->
+                <svg viewBox="0 0 24 24" class="w-16 h-16 text-yellow-600" fill="currentColor">
+                    <path d="M2,19H22V21H2V19M4,17H20V15H4V17M17,3H7A2,2 0 0,0 5,5V13H19V5A2,2 0 0,0 17,3M19,9H21V13H19V9M7,5H17V13H7V5Z" />
+                </svg>
+            </div>
+            <p class="mb-6 text-gray-300">You are a Sugar Cube. <br>He wants to dissolve you in his coffee.</p>
+            <button id="start-btn" class="pointer-events-auto bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 px-8 rounded shadow-[0_4px_0_rgb(113,63,18)] active:shadow-[0_0px_0_rgb(113,63,18)] active:translate-y-1 transition-all text-xl">
+                RUN!
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="hidden absolute inset-0 z-20 flex items-center justify-center bg-red-900/90 backdrop-blur-sm">
+        <div class="text-center max-w-md p-6">
+            <h2 class="text-5xl text-white mb-2 pixel-font shake">DISSOLVED!</h2>
+            <p class="text-xl text-yellow-200 mb-6">Moka Man caught you.</p>
+            <div class="text-2xl mb-8 font-mono">Score: <span id="final-score">0</span></div>
+            <button id="restart-btn" class="pointer-events-auto bg-white hover:bg-gray-200 text-red-900 font-bold py-3 px-8 rounded shadow-lg text-xl">
+                TRY AGAIN
+            </button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score-display');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+
+        // Game State
+        let gameRunning = false;
+        let score = 0;
+        let frameCount = 0;
+        let particles = [];
+        let projectiles = [];
+        
+        // Input State
+        const keys = {
+            ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
+            w: false, s: false, a: false, d: false, W: false, S: false, A: false, D: false
+        };
+        
+        const mouse = { x: 0, y: 0, isDown: false };
+
+        // Resize handling
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Input Listeners
+        window.addEventListener('keydown', (e) => keys[e.key] = true);
+        window.addEventListener('keyup', (e) => keys[e.key] = false);
+        
+        // Touch/Mouse Controls
+        window.addEventListener('mousedown', (e) => {
+            mouse.isDown = true;
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        window.addEventListener('mouseup', () => mouse.isDown = false);
+        
+        window.addEventListener('touchstart', (e) => {
+            mouse.isDown = true;
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+        }, {passive: false});
+        window.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Prevent scrolling
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+        }, {passive: false});
+        window.addEventListener('touchend', () => mouse.isDown = false);
+
+
+        // --- Game Entities ---
+
+        class Player {
+            constructor() {
+                this.x = canvas.width / 2;
+                this.y = canvas.height / 2;
+                this.size = 20;
+                this.speed = 5;
+                this.color = '#ffffff'; // Sugar cube white
+            }
+
+            update() {
+                let dx = 0;
+                let dy = 0;
+
+                // Keyboard
+                if (keys.ArrowUp || keys.w || keys.W) dy = -1;
+                if (keys.ArrowDown || keys.s || keys.S) dy = 1;
+                if (keys.ArrowLeft || keys.a || keys.A) dx = -1;
+                if (keys.ArrowRight || keys.d || keys.D) dx = 1;
+
+                // Normalize vector
+                if (dx !== 0 || dy !== 0) {
+                    const length = Math.sqrt(dx * dx + dy * dy);
+                    dx /= length;
+                    dy /= length;
+                    this.x += dx * this.speed;
+                    this.y += dy * this.speed;
+                } 
+                // Mouse/Touch Follow (if active)
+                else if (mouse.isDown) {
+                    const angle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
+                    const dist = Math.hypot(mouse.x - this.x, mouse.y - this.y);
+                    
+                    if (dist > 10) {
+                        this.x += Math.cos(angle) * this.speed;
+                        this.y += Math.sin(angle) * this.speed;
+                    }
+                }
+
+                // Boundaries
+                this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+                this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                // Sugar Cube Body
+                ctx.fillStyle = this.color;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+                ctx.shadowBlur = 10;
+                ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+                
+                // Cute scared face
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(-4, -2, 2, 0, Math.PI * 2); // Left eye
+                ctx.arc(4, -2, 2, 0, Math.PI * 2); // Right eye
+                ctx.fill();
+                
+                // Mouth (O shape for screaming)
+                ctx.beginPath();
+                ctx.arc(0, 5, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        class MokaMan {
+            constructor() {
+                this.x = -100;
+                this.y = canvas.height / 2;
+                this.size = 80;
+                this.baseSpeed = 2;
+                this.speed = this.baseSpeed;
+                this.angle = 0;
+                this.phase = 'chase'; // chase, charge, shoot
+                this.phaseTimer = 0;
+            }
+
+            update(player) {
+                // Difficulty scaling
+                this.speed = this.baseSpeed + (score / 500);
+
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+                const dist = Math.hypot(dx, dy);
+                this.angle = Math.atan2(dy, dx);
+
+                // AI State Machine
+                this.phaseTimer++;
+
+                if (this.phase === 'chase') {
+                    // Standard following
+                    this.x += Math.cos(this.angle) * this.speed;
+                    this.y += Math.sin(this.angle) * this.speed;
+
+                    // Switch phases occasionally
+                    if (this.phaseTimer > 200 && Math.random() < 0.02) {
+                        this.phase = 'charge';
+                        this.phaseTimer = 0;
+                        // Visual cue for charge
+                        createParticles(this.x, this.y, 'orange', 10);
+                    } else if (this.phaseTimer > 100 && Math.random() < 0.05) {
+                        this.shoot(player);
+                    }
+
+                } else if (this.phase === 'charge') {
+                    // Wait briefly then dash
+                    if (this.phaseTimer < 60) {
+                        // Warning vibration
+                        this.x += (Math.random() - 0.5) * 4;
+                        this.y += (Math.random() - 0.5) * 4;
+                    } else if (this.phaseTimer < 90) {
+                        // DASH!
+                        this.x += Math.cos(this.angle) * (this.speed * 8);
+                        this.y += Math.sin(this.angle) * (this.speed * 8);
+                    } else {
+                        this.phase = 'chase';
+                        this.phaseTimer = 0;
+                    }
+                }
+            }
+
+            shoot(player) {
+                const angle = Math.atan2(player.y - this.y, player.x - this.x);
+                projectiles.push(new Projectile(this.x, this.y, angle));
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                // Rotate to face player mostly, but dampen it so he doesn't spin wildly
+                // Actually, let's keep him upright but look at player? 
+                // Let's just slightly tilt him based on movement x
+                const tilt = Math.max(-0.2, Math.min(0.2, Math.cos(this.angle)));
+                ctx.rotate(tilt);
+
+                // Drawing Moka Man (Based on the image)
+                const scale = 1.2;
+                ctx.scale(scale, scale);
+
+                // 1. Cape/Back aura
+                ctx.fillStyle = '#3E2723';
+                ctx.beginPath();
+                ctx.moveTo(-20, -40);
+                ctx.lineTo(20, -40);
+                ctx.lineTo(30, 60);
+                ctx.lineTo(-30, 60);
+                ctx.fill();
+
+                // 2. Body Armor (Copper/Bronze gradient)
+                const grad = ctx.createLinearGradient(-30, -50, 30, 50);
+                grad.addColorStop(0, '#8D6E63');
+                grad.addColorStop(0.5, '#D7CCC8'); // Shiny metal highlight
+                grad.addColorStop(1, '#5D4037');
+                ctx.fillStyle = grad;
+                
+                // Torso shape
+                ctx.beginPath();
+                ctx.moveTo(-25, -30); // Shoulder L
+                ctx.lineTo(25, -30);  // Shoulder R
+                ctx.lineTo(20, 40);   // Hip R
+                ctx.lineTo(-20, 40);  // Hip L
+                ctx.closePath();
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#3E2723';
+                ctx.stroke();
+
+                // 3. Moka Pot Chest Logo
+                ctx.fillStyle = '#3E2723';
+                ctx.beginPath();
+                // Simple pot silhouette
+                ctx.moveTo(-8, -10);
+                ctx.lineTo(8, -10);
+                ctx.lineTo(10, 5);
+                ctx.lineTo(-10, 5);
+                ctx.fill();
+                
+                // 4. Head (The Moka Pot)
+                ctx.save();
+                ctx.translate(0, -50);
+                
+                // Handle
+                ctx.strokeStyle = '#4E342E';
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(25, 0);
+                ctx.bezierCurveTo(45, 0, 45, 30, 25, 35);
+                ctx.stroke();
+
+                // Pot Shape (Octagonal-ish)
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(-20, -25); // Top L
+                ctx.lineTo(20, -25);  // Top R
+                ctx.lineTo(25, 30);   // Chin R
+                ctx.lineTo(-25, 30);  // Chin L
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Lid Knob
+                ctx.fillStyle = '#3E2723';
+                ctx.fillRect(-5, -35, 10, 10);
+
+                // Eyes (Visor)
+                ctx.fillStyle = '#3E2723';
+                ctx.beginPath();
+                ctx.moveTo(-20, -5);
+                ctx.lineTo(20, -5);
+                ctx.lineTo(15, 10);
+                ctx.lineTo(0, 5); // Nose bridge
+                ctx.lineTo(-15, 10);
+                ctx.fill();
+
+                // Glowing Eyes
+                ctx.fillStyle = '#FFECB3';
+                ctx.beginPath();
+                ctx.arc(-10, 0, 3, 0, Math.PI*2);
+                ctx.arc(10, 0, 3, 0, Math.PI*2);
+                ctx.fill();
+
+                ctx.restore();
+
+                // 5. Arms (Simple circles for hands/shoulders for animation sake)
+                ctx.fillStyle = grad;
+                
+                // Animate arms
+                const armSwing = Math.sin(Date.now() / 100) * 10;
+                
+                // Left Arm
+                ctx.beginPath();
+                ctx.arc(-35, -20 + armSwing, 12, 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Right Arm
+                ctx.beginPath();
+                ctx.arc(35, -20 - armSwing, 12, 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, angle) {
+                this.x = x;
+                this.y = y;
+                this.radius = 6;
+                this.speed = 8;
+                this.vx = Math.cos(angle) * this.speed;
+                this.vy = Math.sin(angle) * this.speed;
+                this.color = '#3e2723'; // Espresso color
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Trail effect
+                if (Math.random() < 0.3) {
+                    particles.push(new Particle(this.x, this.y, '#6D4C41', 2));
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color, sizeBase) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * sizeBase + 1;
+                this.color = color;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.life = 1.0; // Opacity
+                this.decay = Math.random() * 0.05 + 0.02;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+            }
+            
+            draw() {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function createParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color, 5));
+            }
+        }
+
+        // --- Game Loop ---
+
+        let player;
+        let mokaMan;
+        let gameLoopId;
+
+        function initGame() {
+            player = new Player();
+            mokaMan = new MokaMan();
+            score = 0;
+            frameCount = 0;
+            particles = [];
+            projectiles = [];
+            scoreDisplay.innerText = 0;
+            
+            // Initial spawn distance
+            mokaMan.x = -100;
+            mokaMan.y = canvas.height / 2;
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            cancelAnimationFrame(gameLoopId);
+            finalScoreDisplay.innerText = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function checkCollisions() {
+            // Player vs Moka Man
+            const distBoss = Math.hypot(player.x - mokaMan.x, player.y - mokaMan.y);
+            if (distBoss < player.size + mokaMan.size * 0.5) { // Hitbox slightly smaller than visual
+                gameOver();
+            }
+
+            // Player vs Projectiles
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                const distProj = Math.hypot(player.x - p.x, player.y - p.y);
+                if (distProj < player.size + p.radius) {
+                    gameOver();
+                }
+            }
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            // Clear Canvas
+            ctx.fillStyle = '#1a1a1a'; // Dark background
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw Grid (Floor)
+            ctx.strokeStyle = '#2a2a2a';
+            ctx.lineWidth = 1;
+            const gridSize = 50;
+            const offsetX = -player.x % gridSize;
+            const offsetY = -player.y % gridSize;
+            
+            // Moving floor effect relative to player to give sense of speed if we had a camera
+            // But here it's static arena. Let's just draw static grid.
+            ctx.beginPath();
+            for(let x=0; x<=canvas.width; x+=gridSize) { ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
+            for(let y=0; y<=canvas.height; y+=gridSize) { ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
+            ctx.stroke();
+
+            // Updates
+            player.update();
+            mokaMan.update(player);
+
+            // Projectiles
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                projectiles[i].update();
+                if (projectiles[i].x < 0 || projectiles[i].x > canvas.width || 
+                    projectiles[i].y < 0 || projectiles[i].y > canvas.height) {
+                    projectiles.splice(i, 1);
+                }
+            }
+
+            // Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            // Collisions
+            checkCollisions();
+
+            // Draw
+            particles.forEach(p => p.draw());
+            projectiles.forEach(p => p.draw());
+            player.draw();
+            mokaMan.draw();
+
+            // Score
+            if (frameCount % 60 === 0) {
+                score++;
+                scoreDisplay.innerText = score;
+            }
+            frameCount++;
+
+            gameLoopId = requestAnimationFrame(update);
+        }
+
+        // Start Handlers
+        startBtn.addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            gameRunning = true;
+            initGame();
+            update();
+        });
+
+        restartBtn.addEventListener('click', () => {
+            gameOverScreen.classList.add('hidden');
+            gameRunning = true;
+            initGame();
+            update();
+        });
+
+        // Initial Draw
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    </script>
+</body>
+</html>
