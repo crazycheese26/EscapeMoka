@@ -346,7 +346,7 @@
                 this.baseSpeed = 2;
                 this.speed = this.baseSpeed;
                 this.angle = 0;
-                this.phase = 'chase'; // chase, charge, shoot, spin-charge, spin-fire
+                this.phase = 'chase'; // chase, charge, shoot, spin-charge, spin-fire, rain-ascend, rain-pour, rain-descend
                 this.phaseTimer = 0;
                 this.spinAngle = 0; // For spin animation
                 
@@ -378,9 +378,13 @@
                     this.fart();
                 }
 
-                // Difficulty scaling
+                // Difficulty scaling - Progression
                 this.speed = this.baseSpeed + (score / 40); 
-                this.speed = Math.min(this.speed, player.baseSpeed * 1.3);
+                this.speed = Math.min(this.speed, player.baseSpeed * 1.4); // Cap speed slightly higher
+                
+                // Progression Unlocks
+                const canSpin = score > 15;
+                const canRain = score > 30;
 
                 // Calculate angle to player (but don't apply it yet)
                 const dx = player.x - this.x;
@@ -396,24 +400,32 @@
                     this.y += Math.sin(this.angle) * this.speed;
 
                     // Decision Making
-                    const actionChance = 0.02 + (score * 0.0005);
+                    // Chance increases with score
+                    let actionChance = 0.02 + (score * 0.0005);
+                    actionChance = Math.min(actionChance, 0.08); // Cap frequency
                     
                     if (this.phaseTimer > 100 && Math.random() < actionChance) {
                         const rand = Math.random();
                         
-                        if (rand < 0.35) {
+                        // Weighted choices based on progression
+                        if (canRain && rand < 0.20) {
+                            // Rain Attack (High Priority if unlocked)
+                            this.phase = 'rain-ascend';
+                            this.phaseTimer = 0;
+                            floatingTexts.push(new FloatingText(this.x, this.y - 60, "ESPRESSO RAIN!", "#5D4037"));
+                        } else if (canSpin && rand < 0.45) {
+                            // Spin Attack
+                            this.phase = 'spin-charge';
+                            this.phaseTimer = 0;
+                            floatingTexts.push(new FloatingText(this.x, this.y - 60, "SPIN!", "#FFF"));
+                        } else if (rand < 0.70) {
                             // Charge
                             this.phase = 'charge';
                             this.phaseTimer = 0;
                             createParticles(this.x, this.y, 'orange', 10);
-                        } else if (rand < 0.65) {
-                            // NEW: Spin Attack
-                            this.phase = 'spin-charge';
-                            this.phaseTimer = 0;
-                            floatingTexts.push(new FloatingText(this.x, this.y - 60, "SPIN!", "#FFF"));
                         } else {
                             // Shoot (Single or Triple)
-                            if (Math.random() < 0.4) {
+                            if (Math.random() < 0.4 + (score/200)) { // Higher triple chance later
                                 this.tripleShoot(player);
                             } else {
                                 this.shoot(player);
@@ -423,13 +435,10 @@
 
                 } else if (this.phase === 'charge') {
                     if (this.phaseTimer < 60) {
-                        // Warning phase - Keep tracking player so he aims
                         this.angle = angleToPlayer;
-                        // Shake
                         this.x += (Math.random() - 0.5) * 4;
                         this.y += (Math.random() - 0.5) * 4;
                     } else if (this.phaseTimer < 90) {
-                        // DASH PHASE: Straight line dash (angle locked from previous phase)
                         const dashMult = 8 + (score / 100);
                         this.x += Math.cos(this.angle) * (this.speed * dashMult);
                         this.y += Math.sin(this.angle) * (this.speed * dashMult);
@@ -437,25 +446,21 @@
                         this.phase = 'chase';
                         this.phaseTimer = 0;
                     }
+
                 } else if (this.phase === 'spin-charge') {
-                    // Telegraphing: Spin rapidly in place
                     this.spinAngle += 0.4;
-                    
-                    // Suck in particles effect (White/Steam)
                     if (frameCount % 4 === 0) {
                         const range = 60;
                         const px = this.x + (Math.random()-0.5) * range * 2;
                         const py = this.y + (Math.random()-0.5) * range * 2;
-                        // Particle moving towards center
                         const angleToCenter = Math.atan2(this.y - py, this.x - px);
                         const p = new Particle(px, py, '#D7CCC8', 4);
                         p.vx = Math.cos(angleToCenter) * 4;
                         p.vy = Math.sin(angleToCenter) * 4;
-                        p.life = 0.5; // Short life
+                        p.life = 0.5;
                         particles.push(p);
                     }
-
-                    if (this.phaseTimer > 50) { // ~0.8s warning
+                    if (this.phaseTimer > 50) {
                         this.phase = 'spin-fire';
                     }
 
@@ -463,7 +468,49 @@
                     this.spinAttack();
                     this.phase = 'chase';
                     this.phaseTimer = 0;
-                    this.spinAngle = 0; // Reset spin
+                    this.spinAngle = 0;
+
+                } else if (this.phase === 'rain-ascend') {
+                    // Fly upwards off screen
+                    this.y -= 8 + (score/50);
+                    // Add thrust particles downwards
+                    createParticles(this.x, this.y + 40, '#FF5722', 2);
+                    
+                    if (this.y < -150) {
+                        this.phase = 'rain-pour';
+                        this.phaseTimer = 0;
+                    }
+
+                } else if (this.phase === 'rain-pour') {
+                    // Stay offscreen and spawn rain
+                    // Frequency increases with score
+                    const rainFreq = Math.max(2, 10 - Math.floor(score / 20));
+                    
+                    if (frameCount % rainFreq === 0) {
+                        const dropX = Math.random() * canvas.width;
+                        // Drops fall down (angle PI/2)
+                        const dropSpeed = 10 + (score / 40);
+                        projectiles.push(new Projectile(dropX, -20, Math.PI/2, dropSpeed));
+                    }
+                    
+                    // Duration of rain phase
+                    if (this.phaseTimer > 200) { // ~3.3 seconds
+                        this.phase = 'rain-descend';
+                    }
+
+                } else if (this.phase === 'rain-descend') {
+                    // Return to arena (aim for center-ish y)
+                    this.y += 8;
+                    // Keep horizontal tracking a bit so he doesn't land on player unfairly, 
+                    // or maybe just come straight down
+                    if (this.x < player.x) this.x += 1;
+                    if (this.x > player.x) this.x -= 1;
+                    
+                    if (this.y > canvas.height / 4) {
+                        this.phase = 'chase';
+                        this.phaseTimer = 0;
+                        createParticles(this.x, this.y, '#D7CCC8', 20); // Landing dust
+                    }
                 }
             }
 
@@ -498,7 +545,7 @@
             }
 
             spinAttack() {
-                const count = 12;
+                const count = 12 + Math.floor(score/30); // More bullets later
                 const speed = 6 + (score / 60);
                 for(let i=0; i<count; i++) {
                     const angle = (Math.PI * 2 / count) * i;
@@ -506,17 +553,21 @@
                 }
                 // Shockwave particles
                 createParticles(this.x, this.y, '#3E2723', 30);
-                // Screen shake
-                // (Optional: triggers a CSS shake class on canvas container if we had one, but we use canvas offset usually)
             }
 
             draw() {
+                // Hide Moka Man if he is high up in the sky raining (mostly)
+                if (this.phase === 'rain-pour') return;
+
                 ctx.save();
                 ctx.translate(this.x, this.y);
                 
                 // Rotation handling
                 if (this.phase === 'spin-charge') {
                     ctx.rotate(this.spinAngle);
+                } else if (this.phase === 'rain-ascend' || this.phase === 'rain-descend') {
+                    // Point up/down
+                    // No rotation, he flies like Superman
                 } else if (this.stunTimer > 0) {
                     ctx.rotate((Math.random()-0.5) * 0.1);
                 } else {
@@ -577,7 +628,13 @@
                 if (this.phase === 'spin-charge') {
                      ctx.beginPath(); ctx.arc(-40, -10, 12, 0, Math.PI*2); ctx.fill(); ctx.stroke();
                      ctx.beginPath(); ctx.arc(40, -10, 12, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                } else {
+                } 
+                // Flying arms
+                else if (this.phase === 'rain-ascend' || this.phase === 'rain-descend') {
+                    ctx.beginPath(); ctx.arc(-30, -30, 12, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                    ctx.beginPath(); ctx.arc(30, -30, 12, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                }
+                else {
                     const armSwing = Math.sin(Date.now() / 100) * 10;
                     ctx.beginPath(); ctx.arc(-35, -20 + armSwing, 12, 0, Math.PI*2); ctx.fill(); ctx.stroke();
                     ctx.beginPath(); ctx.arc(35, -20 - armSwing, 12, 0, Math.PI*2); ctx.fill(); ctx.stroke();
@@ -831,8 +888,10 @@
             // Projectiles
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 projectiles[i].update();
-                if (projectiles[i].x < 0 || projectiles[i].x > canvas.width || 
-                    projectiles[i].y < 0 || projectiles[i].y > canvas.height) {
+                // FIX: Allow projectiles to spawn/exist slightly off-screen (-50) 
+                // so rain (starting at y=-20) isn't immediately deleted.
+                if (projectiles[i].x < -50 || projectiles[i].x > canvas.width + 50 || 
+                    projectiles[i].y < -50 || projectiles[i].y > canvas.height + 50) {
                     projectiles.splice(i, 1);
                 }
             }
